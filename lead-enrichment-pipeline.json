@@ -1,0 +1,3353 @@
+{
+  "name": "Lead Intelligence & Nurture System",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-capture",
+        "options": {}
+      },
+      "id": "2988a2b0-cbe3-4a5b-9fdb-38ebc34ebd8f",
+      "name": "Tally Form Submission",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        564
+      ],
+      "webhookId": "1dd07369-98a0-4f70-949e-200fe3da1d19"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Name: {{ $json[\"Full Name\"] }}\nEmail: {{ $json[\"Email Address\"] }}\nCompany: {{ $json[\"Company Name\"] }}\nSize: {{ $json[\"Company Size\"] }}\nChallenge: {{ $json['Primary Challenge'] }}\nCurrent Tools: {{ $json['Current Tools'] }}\nTimeline: {{ $json['Project Timeline'] }}\nBudget: {{ $json['Monthly Budget'] }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a lead qualification specialist for a freelance AI automation consultant.\n\nYour job is to extract all lead details and score the lead across 4 dimensions on a scale of 1-10:\n\n- budget_fit: Does their stated budget realistically match consultant rates ($300–$2000 per project)? 10 = perfect fit, 1 = way too low or unclear\n- urgency: How soon do they need this solved? 10 = ASAP / this week, 1 = just exploring with no timeline\n- problem_clarity: How clearly do they understand their own problem? 10 = specific, detailed, knows what they want, 1 = vague, confused, no clear ask\n- decision_maker: Are they likely the person who can approve spending? 10 = owner/founder/director, 1 = unclear or likely junior\n\nCalculate composite_score as the average of all 4 scores rounded to 1 decimal place.\n\nAssign bucket based on composite_score:\n- Hot: 7.5 and above\n- Warm: 4.0 to 7.4\n- Cold: below 4.0\n\nAlso extract:\n- pain_point_theme: one short phrase (3-6 words) summarizing their core operational pain. Examples: \"manual follow-up overload\", \"no lead tracking system\", \"repetitive data entry waste\"\n- first_name: extracted from the Name field only\n- internal_note: 2 sentences explaining why you gave this score. Be specific and reference their actual words.\n\nReturn ONLY valid JSON. No preamble, no explanation, no markdown. Just the JSON object:\n"
+        }
+      },
+      "id": "3e3b536d-b642-4d68-92e8-1c7a364714f5",
+      "name": "AI Agent 1: Extract + Score + Pain Point",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        -384,
+        564
+      ]
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-3-flash-preview",
+        "options": {}
+      },
+      "id": "1339478b-ac37-4cf0-94bc-e2bf21dbf404",
+      "name": "OpenRouter Model (Agent 1)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -376,
+        788
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "LWj83cQr8QanKSOo",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"full_name\": \"\",\n  \"company_name\": \"\",\n  \"company_size\": \"\",\n  \"email\": \"\",\n  \"stated_problem\": \"\",\n  \"current_tools\": \"\",\n  \"budget_range\": \"\",\n  \"timeline\": \"\",\n  \"pain_point_theme\": \"\",\n  \"scores\": {\n    \"budget_fit\": 0,\n    \"urgency\": 0,\n    \"problem_clarity\": 0,\n    \"decision_maker\": 0\n  },\n  \"composite_score\": 0.0,\n  \"bucket\": \"Hot\",\n  \"internal_note\": \"\"\n}"
+      },
+      "id": "73ca1776-3621-4469-9d46-05caa56e2823",
+      "name": "Structured Output Parser (Agent 1)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        -248,
+        788
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Company: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.company_name }}\nCompany Size: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.company_size }}\nStated Problem: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.stated_problem }}\nCurrent Tools: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.current_tools }}\nBudget Range: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.budget_range }}\nTimeline: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.timeline }}\nPain Point Theme: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.pain_point_theme }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a B2B sales intelligence analyst. Given basic company information, your job is to build a brief intelligence profile that helps a freelance AI automation consultant write a hyper-personalized outreach email.\n\nAnalyze the data provided and return intelligence across these dimensions:\n\n1. industry: What industry is this company most likely in? Be specific (e.g. \"B2B SaaS\", \"real estate agency\", \"e-commerce brand\", \"accounting firm\")\n\n2. business_model: How does this company make money? (e.g. \"retainer-based consulting\", \"product sales\", \"subscription SaaS\", \"service marketplace\")\n\n3. likely_tech_stack: Array of exactly 3 tools this company type and size most commonly uses for operations. Be realistic — think Notion, HubSpot, Airtable, Zapier, Typeform, Stripe, etc.\n\n4. core_pain_points: Array of exactly 3 pain points that are extremely common for a company of this type, size, and growth stage. Make them specific, not generic.\n\n5. automation_opportunity: The single highest-impact automation you could build for this company based on their stated problem and company profile. Be specific — name the workflow, not just \"automation\".\n\n6. likely_objections: Array of exactly 2 objections this type of company typically raises when considering hiring an automation consultant. Be realistic.\n\n7. best_positioning_angle: In 1-2 sentences, how should the consultant position their service to this specific lead? What angle will land best given their company type, size, and problem?\n\n8. personalization_hook: One specific, genuine observation about their business situation that can be woven naturally into an email opening. It must feel like the consultant noticed something real — not like they Googled the company. Base it only on the data provided. Keep it under 25 words.\n\nReturn ONLY valid JSON. No preamble, no explanation, no markdown:\n\n{\n  \"industry\": \"\",\n  \"business_model\": \"\",\n  \"likely_tech_stack\": [\"\", \"\", \"\"],\n  \"core_pain_points\": [\"\", \"\", \"\"],\n  \"automation_opportunity\": \"\",\n  \"likely_objections\": [\"\", \"\"],\n  \"best_positioning_angle\": \"\",\n  \"personalization_hook\": \"\"\n}"
+        }
+      },
+      "id": "98f1f9b0-fce6-4a3c-913f-b430170fce90",
+      "name": "AI Agent 2: Company Intelligence",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        -32,
+        312
+      ]
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-3-flash-preview",
+        "options": {}
+      },
+      "id": "6756ca48-706a-44a9-8474-b8d7403ec330",
+      "name": "OpenRouter Model (Agent 2)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -24,
+        536
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "LWj83cQr8QanKSOo",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"industry\": \"B2B consulting\",\n  \"business_model\": \"retainer-based consulting\",\n  \"likely_tech_stack\": [\"Notion\", \"Gmail\", \"HubSpot\"],\n  \"core_pain_points\": [\n    \"Manual follow-up emails eating 2-3 hours daily\",\n    \"No visibility into lead pipeline status\",\n    \"Inconsistent client onboarding process\"\n  ],\n  \"automation_opportunity\": \"Automated lead follow-up sequence that triggers personalized emails based on inquiry type and routes hot leads to calendar booking\",\n  \"likely_objections\": [\n    \"We've tried Zapier before and it broke constantly\",\n    \"Not sure if the ROI justifies the upfront cost\"\n  ],\n  \"best_positioning_angle\": \"Frame this as replacing a part-time VA cost — a one-time build that handles ongoing follow-up without monthly headcount.\",\n  \"personalization_hook\": \"Running a small consulting team means every hour spent on manual emails is an hour not spent on client work\"\n}"
+      },
+      "id": "92aa6d96-7b81-4288-ac29-d63b13f197cd",
+      "name": "Structured Output Parser (Agent 2)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        104,
+        536
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "31925c0e-a33b-8051-ac0f-c2dbf49a7c5e",
+          "mode": "list",
+          "cachedResultName": "Lead CRM",
+          "cachedResultUrl": "https://www.notion.so/31925c0ea33b8051ac0fc2dbf49a7c5e"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Customer Name|title",
+              "title": "={{ $json.output.full_name }}"
+            },
+            {
+              "key": "Company Name|rich_text",
+              "textContent": "={{ $json.output.company_name }}"
+            },
+            {
+              "key": "Company Size|rich_text",
+              "textContent": "={{ $json.output.company_size }}"
+            },
+            {
+              "key": "Email|email",
+              "emailValue": "={{ $json.output.email }}"
+            },
+            {
+              "key": "Pain Point|rich_text",
+              "textContent": "={{ $json.output.pain_point_theme }}"
+            },
+            {
+              "key": "Budget|rich_text",
+              "textContent": "={{ $json.output.budget_range }}"
+            },
+            {
+              "key": "Timeline|rich_text",
+              "textContent": "={{ $json.output.timeline }}"
+            },
+            {
+              "key": "Composite Score|number",
+              "numberValue": "={{ $json.output.composite_score }}"
+            },
+            {
+              "key": "Bucket|select",
+              "selectValue": "={{ $json.output.bucket }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "New"
+            },
+            {
+              "key": "Internal Note|rich_text",
+              "textContent": "={{ $json.output.internal_note }}"
+            },
+            {
+              "key": "Date Received|date",
+              "includeTime": false,
+              "date": "=={{ new Date().toISOString().split('T')[0] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a85cde06-4d74-433a-8303-5a158e5c751a",
+      "name": "Notion: Create Lead Page",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        32,
+        712
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "ar5uPR6Oiu6uPOcZ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "aaa0fa22-3ffc-4fc0-8b52-bfa1d0e5247e",
+      "name": "Merge: Intel + Notion Page ID",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        320,
+        564
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Lead First Name: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.full_name }}\nCompany: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.company_name }}\nStated Problem: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.stated_problem }}\nPain Point Theme: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.pain_point_theme }}\nBucket: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.bucket }}\nComposite Score: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.composite_score }}\nIndustry: {{ $('AI Agent 2: Company Intelligence').item.json.output.industry }}\nBusiness Model: {{ $('AI Agent 2: Company Intelligence').item.json.output.business_model }}\nAutomation Opportunity: {{ $('AI Agent 2: Company Intelligence').item.json.output.automation_opportunity }}\nBest Positioning: {{ $('AI Agent 2: Company Intelligence').item.json.output.best_positioning_angle }}\nPersonalization Hook: {{ $('AI Agent 2: Company Intelligence').item.json.output.personalization_hook }}\nLikely Objection: {{ $('AI Agent 2: Company Intelligence').item.json.output.likely_objections[0] }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a world-class B2B copywriter writing a reply email on behalf of a freelance AI automation consultant responding to a warm inbound lead.\n\nThe lead filled out a contact form expressing interest in automation help. Your email must feel like the consultant personally read their message and took 10 minutes to think about their specific situation before replying.\n\nTONE RULES based on bucket:\n- Hot: Confident, direct, specific, clear CTA to book a 15-minute call. No hedging.\n- Warm: Helpful, curious, adds value. End with one open question that moves them forward. No hard sell.\n- Cold: Educational, warm, zero pressure. Plant a seed. Leave the door open. No CTA.\n\nWRITING RULES:\n- Open with the personalization hook woven naturally into the first sentence — do NOT make it feel like research or a compliment. Make it an observation.\n- Reference their specific stated problem using their own language where possible\n- Mention the automation opportunity specifically — not \"I can help automate things\" but the actual workflow\n- Pre-empt the objection briefly and naturally — one sentence max, don't dwell on it\n- Do NOT use the word \"automations\" more than once\n- Do NOT open with \"I\" — start with the lead's name or the observation\n- Do NOT say \"I came across your message\" or \"I noticed you filled out our form\"\n- Do NOT use buzzwords: leverage, streamline, cutting-edge, game-changer, seamlessly\n- Sound like a smart human, not a SaaS marketing email\n- Under 200 words total\n- Subject line must be specific and conversational — not marketing-sounding\n\nReturn ONLY valid JSON. No preamble, no markdown:\n\n{\n  \"email_subject\": \"\",\n  \"email_body\": \"\"\n}"
+        }
+      },
+      "id": "b405c77f-3de0-43a9-9caa-a702895a3d66",
+      "name": "AI Agent 3: Hyper-Personalized Email Writer",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        544,
+        564
+      ]
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-3-flash-preview",
+        "options": {}
+      },
+      "id": "4b00e112-1760-4b8b-8922-94034c48181d",
+      "name": "OpenRouter Model (Agent 3)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        552,
+        788
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "LWj83cQr8QanKSOo",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"email_subject\": \"The follow-up problem at Mitchell Consulting\",\n  \"email_body\": \"Sarah — running a small consulting team means client work has to come first, which makes it easy for follow-ups to pile up until they're already too late.\\n\\nThe specific issue you described — 3 hours daily on manual outreach — is exactly what I've been solving with n8n-based automation. For a team your size, the build would look like: new inquiry comes in, gets automatically qualified, personalized reply sends within 60 seconds, and hot leads get routed straight to your calendar without you touching it.\\n\\nOne thing that usually comes up: you mentioned using Gmail and Notion already — this plugs directly into both, so there's nothing new to learn on your end.\\n\\nWould a 15-minute call this week make sense? I can walk you through what the build would look like for your setup specifically.\"\n}"
+      },
+      "id": "4526e51b-995a-48f3-bf7f-d62d76879cf4",
+      "name": "Structured Output Parser (Agent 3)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        680,
+        788
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.bucket }}",
+                    "rightValue": "Hot",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "c9a18a93-27a7-4e30-a0cb-c9e6c43ffa2a"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Hot"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.bucket }}",
+                    "rightValue": "Warm",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "ed24367f-c738-4ea5-92b4-c6ea97d72ddf"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Warm"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.bucket }}",
+                    "rightValue": "Cold",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "058f2aef-5b35-42d1-8c73-2ee307db8c40"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Cold"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": 2
+        }
+      },
+      "id": "2e4a250d-a4ab-4116-8434-a9aa44e80714",
+      "name": "Priority Switch: Hot / Warm / Cold",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        896,
+        548
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.email }}",
+        "subject": "={{ $('AI Agent 3: Hyper-Personalized Email Writer').item.json.output.email_subject }}",
+        "emailType": "text",
+        "message": "={{ $('AI Agent 3: Hyper-Personalized Email Writer').item.json.output.email_body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "71a5649e-d997-4a0d-a2e9-f23fa2137876",
+      "name": "Send Hot Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1120,
+        372
+      ],
+      "webhookId": "6335ed6b-4f4c-4724-8d6b-ce64f6623695",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DDfWNylRpFj1Z2OZ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.email }}",
+        "subject": "={{ $('AI Agent 3: Hyper-Personalized Email Writer').item.json.output.email_subject }}",
+        "emailType": "text",
+        "message": "={{ $('AI Agent 3: Hyper-Personalized Email Writer').item.json.output.email_body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "635b1057-434a-47f3-a83b-3791ce48017b",
+      "name": "Send Warm Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1120,
+        564
+      ],
+      "webhookId": "06c2ee10-ad40-4241-ae3c-dfddf198373a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DDfWNylRpFj1Z2OZ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.email }}",
+        "subject": "={{ $('AI Agent 3: Hyper-Personalized Email Writer').item.json.output.email_subject }}",
+        "emailType": "text",
+        "message": "={{ $('AI Agent 3: Hyper-Personalized Email Writer').item.json.output.email_body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "67a27029-4fc1-46bc-8cb0-18b11cdd0cd2",
+      "name": "Send Cold Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1120,
+        756
+      ],
+      "webhookId": "21cee337-d5cb-44a1-ba6b-bcdc47c38a27",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DDfWNylRpFj1Z2OZ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Notion: Create Lead Page').item.json.id }}",
+          "mode": "id",
+          "__regex": "^([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        },
+        "simple": false,
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status|select",
+              "type": "select",
+              "selectValue": "=Email 1 Sent"
+            },
+            {
+              "key": "Industry|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $('AI Agent 2: Company Intelligence').item.json.output.industry }}"
+            },
+            {
+              "key": "Automation Opportunity|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $('AI Agent 2: Company Intelligence').item.json.output.automation_opportunity }}"
+            },
+            {
+              "key": "Email 1 Subject|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $('Priority Switch: Hot / Warm / Cold').item.json.output.email_subject }}"
+            },
+            {
+              "key": "Email 1 Sent At|date",
+              "type": "date",
+              "includeTime": false,
+              "date": "={{ new Date().toISOString().split('T')[0] }}"
+            },
+            {
+              "key": "Tech Stack|rich_text",
+              "textContent": "={{ $('Merge: Intel + Notion Page ID').item.json.output.likely_tech_stack.join(', ') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "88bd57ff-9287-41af-af0c-29b332cf860c",
+      "name": "Update Notion: Warm (Score + Intel + Email 1)",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        564
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "ar5uPR6Oiu6uPOcZ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "5865270440",
+        "text": "=🔥 HOT LEAD ALERT\n\n👤 {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.full_name }} — {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.company_name }}\n📊 Score: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.composite_score }}/10\n🏢 {{ $('AI Agent 2: Company Intelligence').item.json.output.industry }} | {{ $('AI Agent 2: Company Intelligence').item.json.output.business_model }}\n\n💡 Opportunity:\n{{ $('AI Agent 2: Company Intelligence').item.json.output.automation_opportunity }}\n\n🎯 Positioning:\n{{ $('AI Agent 2: Company Intelligence').item.json.output.best_positioning_angle }}\n\n⚠️ Watch for:\n{{ $('AI Agent 2: Company Intelligence').item.json.output.likely_objections[0] }}\n\n🪝 Hook Used:\n{{ $('AI Agent 2: Company Intelligence').item.json.output.personalization_hook }}\n\n🛠 Stack: {{ $('AI Agent 2: Company Intelligence').item.json.output.likely_tech_stack.join(', ') }}\n\n📧 Reply to: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.email }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "eb0a09e9-2d06-4ffe-85b8-76be8798fd19",
+      "name": "Telegram: Hot Lead Intel Brief",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1568,
+        372
+      ],
+      "webhookId": "f4334ce8-6368-4ae3-9b72-f8c7073dc37c",
+      "credentials": {
+        "telegramApi": {
+          "id": "BIlM8ccwjoG5Q7Ei",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 23.56,
+        "unit": "hours"
+      },
+      "id": "11f2d902-85d7-455f-8bdf-eb2b4428f674",
+      "name": "Wait 24 Hours",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2016,
+        372
+      ],
+      "webhookId": "wait-24h-resume"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 1,
+        "simple": false,
+        "filters": {
+          "q": "=from:{{ $json[\"Email Address\"] }} is:inbox"
+        },
+        "options": {}
+      },
+      "id": "9043eb0d-6e0b-40ac-bbbd-b50e066f08bd",
+      "name": "Gmail: Check for Reply (1)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2240,
+        372
+      ],
+      "webhookId": "4e12a6a8-ae81-4ade-a95a-9137ed7bcfc2",
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DDfWNylRpFj1Z2OZ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "id": "af465d93-5667-4dd0-93f3-eae961ef1c99"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7e23367e-a8a2-4dba-9c38-3e9234154268",
+      "name": "Reply Check 1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [
+        2464,
+        372
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Notion: Create Lead Page').item.json.id }}",
+          "mode": "id",
+          "__regex": "^([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status|select",
+              "type": "select",
+              "selectValue": "=Replied - Sequence Stopped"
+            },
+            {
+              "key": "Replied At|date",
+              "type": "date",
+              "includeTime": false,
+              "date": "={{ $json.headers.date }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ef8d9f97-e8ac-4d7c-84ff-7c7aa2421a53",
+      "name": "Update Notion: Status Replied (1)",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2752,
+        224
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "ar5uPR6Oiu6uPOcZ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Lead Name: {{ $('Edit Fields').item.json['Full Name'] }}\nCompany: {{ $('Edit Fields').item.json['Company Name'] }}\nPain Point Theme: {{ $('Edit Fields').item.json['Pain Point Theme'] }}\nIndustry: {{ $('Edit Fields').item.json.Industry }}\nAutomation Opportunity: {{ $('Edit Fields').item.json['Automation Opportunity'] }}\nEmail 1 Subject: {{ $('Edit Fields').item.json['Email 1 Subject'] }}\nEmail 1 Body: {{ $('Edit Fields').item.json['Email 1 Body'] }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are writing Email 2 in a 3-email nurture sequence for a freelance AI automation consultant.\n\nThis email arrives 24 hours after Email 1 which the lead did NOT reply to.\n\nRULES:\n- Do NOT repeat or summarize Email 1\n- Add exactly one concrete insight, tip, or real-world example directly related to their pain point and industry\n- The insight should make them think \"I hadn't considered that\" — not generic automation advice\n- Reference their industry context naturally, not explicitly\n- End with one soft, open-ended question — no hard sell, no \"book a call\" pressure\n- Under 150 words\n- Subject line must feel like a new angle — NOT starting with Re: and NOT similar to Email 1's subject\n- Sound like a human who genuinely thought about their situation, not a follow-up sequence\n\nReturn ONLY valid JSON, no markdown, no preamble:\n{\n  \"email_subject\": \"\",\n  \"email_body\": \"\"\n}"
+        }
+      },
+      "id": "7391c585-066b-494f-b668-09a4aac1f790",
+      "name": "AI Agent: Write Email 2 (Value Add)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        2688,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-3-flash-preview",
+        "options": {}
+      },
+      "id": "be7a6132-6ac6-4c3b-98cf-cd3c7e78522a",
+      "name": "OpenRouter Model (Email 2)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2696,
+        744
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "LWj83cQr8QanKSOo",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"email_subject\": \"Something I noticed about floral booking workflows\",\n  \"email_body\": \"Email body here...\"\n}"
+      },
+      "id": "12654f69-2e81-4109-92ad-890ea09d1527",
+      "name": "Structured Output Parser (Email 2)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        2824,
+        744
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Edit Fields').item.json[\"Email Address\"] }}",
+        "subject": "={{ $json.output.email_subject }}",
+        "message": "={{ $json.output.email_body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "7bcaef98-f341-4f4d-bda1-2b420c2c36bd",
+      "name": "Send Email 2",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3040,
+        520
+      ],
+      "webhookId": "8f31d9b6-c2f9-4ee5-b9e6-853420b690b0",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DDfWNylRpFj1Z2OZ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Edit Fields').item.json[\"Notion Page ID\"] }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status|select",
+              "type": "select",
+              "selectValue": "=Email 2 Sent"
+            },
+            {
+              "key": "Email 2 Subject|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $('AI Agent: Write Email 2 (Value Add)').item.json.output.email_subject }}"
+            },
+            {
+              "key": "Email 2 Sent At|date",
+              "type": "date",
+              "includeTime": false,
+              "date": "={{ new Date().toISOString().split('T')[0] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2c46890f-9618-4aa7-aad5-e8c8eb28e84c",
+      "name": "Update Notion: Email 2 Sent",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        3264,
+        520
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "ar5uPR6Oiu6uPOcZ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 48,
+        "unit": "hours"
+      },
+      "id": "7ebb91a9-9b50-4ef7-95eb-768d6ca816e4",
+      "name": "Wait 48 Hours",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -608,
+        1128
+      ],
+      "webhookId": "wait-48h-resume"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 1,
+        "filters": {
+          "q": "=from:{{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.email }} is:inbox"
+        }
+      },
+      "id": "6ce26ffc-392b-4c98-8c70-8c74bc83cb50",
+      "name": "Gmail: Check for Reply (2)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -384,
+        1128
+      ],
+      "webhookId": "8196a58d-7ddc-4a83-a08b-edf9059705f0",
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DDfWNylRpFj1Z2OZ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a3aea7d5-40c9-4e5a-9335-67d4d9957ef0",
+      "name": "Reply Check 2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [
+        -160,
+        1128
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": "={{ $('Notion: Create Lead Page').item.json.id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status",
+              "type": "select",
+              "selectValue": "Replied — Sequence Stopped"
+            },
+            {
+              "key": "Replied At",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9ace00fa-2489-4880-8caf-1400d37c111d",
+      "name": "Update Notion: Status Replied (2)",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        128,
+        980
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "ar5uPR6Oiu6uPOcZ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Lead Name: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.first_name }}\nCompany: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.company_name }}\nPain Point Theme: {{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.pain_point_theme }}\nEmail 1 Subject: {{ $('AI Agent 3: Hyper-Personalized Email Writer').item.json.output.email_subject }}\nEmail 2 Subject: {{ $('AI Agent: Write Email 2 (Value Add)').item.json.output.email_subject }}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "id": "a7d4af53-78fe-48fc-b8e0-d87859d4a0d1",
+      "name": "AI Agent: Write Email 3 (Final Touchpoint)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        64,
+        1276
+      ]
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-3-flash-preview",
+        "options": {}
+      },
+      "id": "5728b797-fb63-4df8-aa34-db085a44c5fe",
+      "name": "OpenRouter Model (Email 3)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        72,
+        1500
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "LWj83cQr8QanKSOo",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"email_subject\": { \"type\": \"string\" },\n    \"email_body\": { \"type\": \"string\" }\n  }\n}"
+      },
+      "id": "eb9b5f84-20dc-4c94-ac80-7b4552b563e2",
+      "name": "Structured Output Parser (Email 3)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.email }}",
+        "subject": "={{ $json.output.email_subject }}",
+        "message": "={{ $json.output.email_body }}",
+        "options": {}
+      },
+      "id": "3e8c2c65-7797-4845-83d6-b6c6f4fa8985",
+      "name": "Send Email 3",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        416,
+        1276
+      ],
+      "webhookId": "53f70584-d817-4ed3-b73a-5e3f5a08bb9a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DDfWNylRpFj1Z2OZ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": "={{ $('Notion: Create Lead Page').item.json.id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status",
+              "type": "select",
+              "selectValue": "Sequence Complete — All 3 Emails Sent"
+            },
+            {
+              "key": "Email 3 Subject",
+              "type": "rich_text"
+            },
+            {
+              "key": "Email 3 Sent At",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ad08dbee-ca98-40a4-b925-59d10fd781a6",
+      "name": "Update Notion: Sequence Complete",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        640,
+        1276
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "ar5uPR6Oiu6uPOcZ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const fields = $input.first().json.body.data.fields;\n\nconst resolved = {};\n\nfor (const field of fields) {\n  const key = field.label.trim();\n\n  if (field.value === null || field.value === undefined) {\n    resolved[key] = null;\n    continue;\n  }\n\n  // Dropdown fields — resolve UUID(s) to text\n  if (field.type === \"DROPDOWN\" || field.type === \"MULTIPLE_CHOICE\") {\n    const selectedIds = Array.isArray(field.value) ? field.value : [field.value];\n    const selectedTexts = selectedIds.map(id => {\n      const match = field.options.find(opt => opt.id === id);\n      return match ? match.text : id;\n    });\n    resolved[key] = selectedTexts.length === 1 ? selectedTexts[0] : selectedTexts;\n  } else {\n    // Plain fields — text, email, textarea\n    resolved[key] = Array.isArray(field.value) ? field.value[0] : field.value;\n  }\n}\n\nreturn [{ json: resolved }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        564
+      ],
+      "id": "0021254d-7e96-433b-bc0d-365331be2873",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "content": "## Emails still need formatting, a lot of it. ",
+        "height": 720,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1200,
+        1920
+      ],
+      "typeVersion": 1,
+      "id": "bfc792a8-79ad-4e9a-873c-9477f74a4480",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Notion: Create Lead Page').item.json.id }}\n",
+          "mode": "id"
+        },
+        "simple": false,
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status|select",
+              "type": "select",
+              "selectValue": "=Email 1 Sent"
+            },
+            {
+              "key": "Industry|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $('AI Agent 2: Company Intelligence').item.json.output.industry }}"
+            },
+            {
+              "key": "Automation Opportunity|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $('AI Agent 2: Company Intelligence').item.json.output.automation_opportunity }}"
+            },
+            {
+              "key": "Email 1 Subject|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $('Priority Switch: Hot / Warm / Cold').item.json.output.email_subject }}"
+            },
+            {
+              "key": "Email 1 Sent At|date",
+              "type": "date",
+              "includeTime": false,
+              "date": "={{ new Date().toISOString().split('T')[0] }}"
+            },
+            {
+              "key": "Tech Stack|rich_text",
+              "textContent": "={{ $('Merge: Intel + Notion Page ID').item.json.output.likely_tech_stack.join(', ') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "825fd3d2-2280-4d2b-a1b0-db1e2622d570",
+      "name": "Update Notion: Hot (Score + Intel + Email 1)2",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        372
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "ar5uPR6Oiu6uPOcZ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Notion: Create Lead Page').item.json.id }}",
+          "mode": "id",
+          "__regex": "^([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        },
+        "simple": false,
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status|select",
+              "type": "select",
+              "selectValue": "=Email 1 Sent"
+            },
+            {
+              "key": "Industry|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $('AI Agent 2: Company Intelligence').item.json.output.industry }}"
+            },
+            {
+              "key": "Automation Opportunity|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $('AI Agent 2: Company Intelligence').item.json.output.automation_opportunity }}"
+            },
+            {
+              "key": "Email 1 Subject|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $('Priority Switch: Hot / Warm / Cold').item.json.output.email_subject }}"
+            },
+            {
+              "key": "Email 1 Sent At|date",
+              "type": "date",
+              "includeTime": false,
+              "date": "={{ new Date().toISOString().split('T')[0] }}"
+            },
+            {
+              "key": "Tech Stack|rich_text",
+              "textContent": "={{ $('Merge: Intel + Notion Page ID').item.json.output.likely_tech_stack.join(', ') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d40a89ce-a91b-4a98-9132-2605444b74e2",
+      "name": "Update Notion: Cold (Score + Intel + Email 1)",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        756
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "ar5uPR6Oiu6uPOcZ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c2cbfaa7-4cd6-4dc9-83ad-46ecbade3b4d",
+              "name": "Email Address",
+              "value": "={{ $('Code in JavaScript').item.json[\"Email Address\"] }}",
+              "type": "string"
+            },
+            {
+              "id": "81854a11-7198-46af-bddf-7f296574f27f",
+              "name": "Full Name",
+              "value": "={{ $('Code in JavaScript').item.json[\"Full Name\"] }}",
+              "type": "string"
+            },
+            {
+              "id": "b4945a9a-248a-4c95-81bf-419783a5fe1f",
+              "name": "Company Name",
+              "value": "={{ $('Code in JavaScript').item.json[\"Company Name\"] }}",
+              "type": "string"
+            },
+            {
+              "id": "0225b07f-cb21-427f-9a4e-e4408fcf13e0",
+              "name": "Notion Page ID",
+              "value": "={{ $('Notion: Create Lead Page').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "7e540347-729f-4194-a149-eb23720bf4a8",
+              "name": "Pain Point Theme",
+              "value": "={{ $('AI Agent 1: Extract + Score + Pain Point').item.json.output.pain_point_theme }}",
+              "type": "string"
+            },
+            {
+              "id": "8a215c04-6733-44e6-9e9d-3e27a03b1494",
+              "name": "Industry",
+              "value": "={{ $('AI Agent 2: Company Intelligence').item.json.output.industry }}",
+              "type": "string"
+            },
+            {
+              "id": "0b222e6e-4a60-4055-9dfa-9adf91a65c10",
+              "name": "Automation Opportunity",
+              "value": "={{ $('AI Agent 2: Company Intelligence').item.json.output.automation_opportunity }}",
+              "type": "string"
+            },
+            {
+              "id": "90f669ef-7121-452c-8ee9-fd6f87aa5cd5",
+              "name": "Email 1 Subject",
+              "value": "={{ $('AI Agent 3: Hyper-Personalized Email Writer').item.json.output.email_subject }}",
+              "type": "string"
+            },
+            {
+              "id": "cc12a492-1135-4cfb-8000-9747f3b4f03e",
+              "name": "Email 1 Body",
+              "value": "={{ $('AI Agent 3: Hyper-Personalized Email Writer').item.json.output.email_body }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1792,
+        372
+      ],
+      "id": "5f4c530d-3645-473e-899f-26afe8fd70ec",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8d149914-7805-417e-8030-1468d6678aa2",
+              "name": "Email Address",
+              "value": "={{ $('Edit Fields').item.json[\"Email Address\"] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -832,
+        1128
+      ],
+      "id": "f7ff2996-81c4-4da2-ac3c-50156755bd3d",
+      "name": "Edit Fields1"
+    }
+  ],
+  "pinData": {
+    "Update Notion: Warm (Score + Intel + Email 1)": [
+      {
+        "json": {
+          "object": "page",
+          "id": "31925c0e-a33b-8198-99b9-e73cd8bff276",
+          "created_time": "2026-03-04T19:39:00.000Z",
+          "last_edited_time": "2026-03-04T20:02:00.000Z",
+          "created_by": {
+            "object": "user",
+            "id": "31825c0e-a33b-81b6-8788-002780f06bd3"
+          },
+          "last_edited_by": {
+            "object": "user",
+            "id": "31825c0e-a33b-81b6-8788-002780f06bd3"
+          },
+          "cover": null,
+          "icon": null,
+          "parent": {
+            "type": "database_id",
+            "database_id": "31925c0e-a33b-8051-ac0f-c2dbf49a7c5e"
+          },
+          "archived": false,
+          "in_trash": false,
+          "is_locked": false,
+          "properties": {
+            "Internal Note": {
+              "id": "%3EYo%3B",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "The lead has a clear objective of automating wedding bookings, but the budget is on the lower end of the consultant's range. While the timeline is defined, the solo-operator status and modest budget suggest a need for a simple, cost-effective solution.",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "The lead has a clear objective of automating wedding bookings, but the budget is on the lower end of the consultant's range. While the timeline is defined, the solo-operator status and modest budget suggest a need for a simple, cost-effective solution.",
+                  "href": null
+                }
+              ]
+            },
+            "Email 3 Sent At": {
+              "id": "%40Vcn",
+              "type": "date",
+              "date": null
+            },
+            "Timeline": {
+              "id": "AwHQ",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "1-3 Months",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "1-3 Months",
+                  "href": null
+                }
+              ]
+            },
+            "Replied At": {
+              "id": "EV%7Bl",
+              "type": "date",
+              "date": null
+            },
+            "Email 1 Subject": {
+              "id": "G_f%7C",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Quick question on your wedding booking workflow",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Quick question on your wedding booking workflow",
+                  "href": null
+                }
+              ]
+            },
+            "Tech Stack": {
+              "id": "K%7CRk",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Instagram Business, Calendly, HoneyBook or Dubsado",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Instagram Business, Calendly, HoneyBook or Dubsado",
+                  "href": null
+                }
+              ]
+            },
+            "Email": {
+              "id": "R%5BfJ",
+              "type": "email",
+              "email": "urv2000patel@gmail.com"
+            },
+            "Email 3 Subject": {
+              "id": "Xer%60",
+              "type": "rich_text",
+              "rich_text": []
+            },
+            "Company Size": {
+              "id": "%5B%7CLg",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "1",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "1",
+                  "href": null
+                }
+              ]
+            },
+            "Email 2 Sent At": {
+              "id": "aEXV",
+              "type": "date",
+              "date": null
+            },
+            "Composite Score": {
+              "id": "d%60v%3F",
+              "type": "number",
+              "number": 6.3
+            },
+            "Bucket": {
+              "id": "h%3B%40H",
+              "type": "select",
+              "select": {
+                "id": "WtME",
+                "name": "Warm",
+                "color": "yellow"
+              }
+            },
+            "Date Received": {
+              "id": "o_%40X",
+              "type": "date",
+              "date": {
+                "start": "2026-03-03",
+                "end": null,
+                "time_zone": null
+              }
+            },
+            "Automation Opportunity": {
+              "id": "q%7By~",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "An automated lead-to-booking inquiry workflow that uses a Typeform or Tally form to qualify wedding dates and automatically sends a calendar link and pricing guide.",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "An automated lead-to-booking inquiry workflow that uses a Typeform or Tally form to qualify wedding dates and automatically sends a calendar link and pricing guide.",
+                  "href": null
+                }
+              ]
+            },
+            "Pain Point": {
+              "id": "rPtO",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "manual wedding booking process overload",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "manual wedding booking process overload",
+                  "href": null
+                }
+              ]
+            },
+            "Budget": {
+              "id": "tXue",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "$201-$500",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "$201-$500",
+                  "href": null
+                }
+              ]
+            },
+            "Email 1 Sent At": {
+              "id": "taIQ",
+              "type": "date",
+              "date": {
+                "start": "2026-03-04",
+                "end": null,
+                "time_zone": null
+              }
+            },
+            "Status": {
+              "id": "yaK%60",
+              "type": "select",
+              "select": {
+                "id": "f7a8a78a-e753-4ac2-b621-a907f3eccddc",
+                "name": "Email 1 Sent",
+                "color": "yellow"
+              }
+            },
+            "Industry": {
+              "id": "zDYL",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Solopreneur Florist / Event Design",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Solopreneur Florist / Event Design",
+                  "href": null
+                }
+              ]
+            },
+            "Email 2 Subject": {
+              "id": "%7CNfO",
+              "type": "rich_text",
+              "rich_text": []
+            },
+            "Company Name": {
+              "id": "~Guk",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Bloom Floral",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Bloom Floral",
+                  "href": null
+                }
+              ]
+            },
+            "Customer Name": {
+              "id": "title",
+              "type": "title",
+              "title": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Elena Rodriguez",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Elena Rodriguez",
+                  "href": null
+                }
+              ]
+            }
+          },
+          "url": "https://www.notion.so/Elena-Rodriguez-31925c0ea33b819899b9e73cd8bff276",
+          "public_url": null,
+          "request_id": "2ef7c1dd-6581-406b-aca5-db900946287b"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Update Notion: Cold (Score + Intel + Email 1)": [
+      {
+        "json": {
+          "object": "page",
+          "id": "31925c0e-a33b-8198-99b9-e73cd8bff276",
+          "created_time": "2026-03-04T19:39:00.000Z",
+          "last_edited_time": "2026-03-04T20:02:00.000Z",
+          "created_by": {
+            "object": "user",
+            "id": "31825c0e-a33b-81b6-8788-002780f06bd3"
+          },
+          "last_edited_by": {
+            "object": "user",
+            "id": "31825c0e-a33b-81b6-8788-002780f06bd3"
+          },
+          "cover": null,
+          "icon": null,
+          "parent": {
+            "type": "database_id",
+            "database_id": "31925c0e-a33b-8051-ac0f-c2dbf49a7c5e"
+          },
+          "archived": false,
+          "in_trash": false,
+          "is_locked": false,
+          "properties": {
+            "Internal Note": {
+              "id": "%3EYo%3B",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "The lead has a clear objective of automating wedding bookings, but the budget is on the lower end of the consultant's range. While the timeline is defined, the solo-operator status and modest budget suggest a need for a simple, cost-effective solution.",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "The lead has a clear objective of automating wedding bookings, but the budget is on the lower end of the consultant's range. While the timeline is defined, the solo-operator status and modest budget suggest a need for a simple, cost-effective solution.",
+                  "href": null
+                }
+              ]
+            },
+            "Email 3 Sent At": {
+              "id": "%40Vcn",
+              "type": "date",
+              "date": null
+            },
+            "Timeline": {
+              "id": "AwHQ",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "1-3 Months",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "1-3 Months",
+                  "href": null
+                }
+              ]
+            },
+            "Replied At": {
+              "id": "EV%7Bl",
+              "type": "date",
+              "date": null
+            },
+            "Email 1 Subject": {
+              "id": "G_f%7C",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Quick question on your wedding booking workflow",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Quick question on your wedding booking workflow",
+                  "href": null
+                }
+              ]
+            },
+            "Tech Stack": {
+              "id": "K%7CRk",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Instagram Business, Calendly, HoneyBook or Dubsado",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Instagram Business, Calendly, HoneyBook or Dubsado",
+                  "href": null
+                }
+              ]
+            },
+            "Email": {
+              "id": "R%5BfJ",
+              "type": "email",
+              "email": "urv2000patel@gmail.com"
+            },
+            "Email 3 Subject": {
+              "id": "Xer%60",
+              "type": "rich_text",
+              "rich_text": []
+            },
+            "Company Size": {
+              "id": "%5B%7CLg",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "1",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "1",
+                  "href": null
+                }
+              ]
+            },
+            "Email 2 Sent At": {
+              "id": "aEXV",
+              "type": "date",
+              "date": null
+            },
+            "Composite Score": {
+              "id": "d%60v%3F",
+              "type": "number",
+              "number": 6.3
+            },
+            "Bucket": {
+              "id": "h%3B%40H",
+              "type": "select",
+              "select": {
+                "id": "WtME",
+                "name": "Warm",
+                "color": "yellow"
+              }
+            },
+            "Date Received": {
+              "id": "o_%40X",
+              "type": "date",
+              "date": {
+                "start": "2026-03-03",
+                "end": null,
+                "time_zone": null
+              }
+            },
+            "Automation Opportunity": {
+              "id": "q%7By~",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "An automated lead-to-booking inquiry workflow that uses a Typeform or Tally form to qualify wedding dates and automatically sends a calendar link and pricing guide.",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "An automated lead-to-booking inquiry workflow that uses a Typeform or Tally form to qualify wedding dates and automatically sends a calendar link and pricing guide.",
+                  "href": null
+                }
+              ]
+            },
+            "Pain Point": {
+              "id": "rPtO",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "manual wedding booking process overload",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "manual wedding booking process overload",
+                  "href": null
+                }
+              ]
+            },
+            "Budget": {
+              "id": "tXue",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "$201-$500",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "$201-$500",
+                  "href": null
+                }
+              ]
+            },
+            "Email 1 Sent At": {
+              "id": "taIQ",
+              "type": "date",
+              "date": {
+                "start": "2026-03-04",
+                "end": null,
+                "time_zone": null
+              }
+            },
+            "Status": {
+              "id": "yaK%60",
+              "type": "select",
+              "select": {
+                "id": "f7a8a78a-e753-4ac2-b621-a907f3eccddc",
+                "name": "Email 1 Sent",
+                "color": "yellow"
+              }
+            },
+            "Industry": {
+              "id": "zDYL",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Solopreneur Florist / Event Design",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Solopreneur Florist / Event Design",
+                  "href": null
+                }
+              ]
+            },
+            "Email 2 Subject": {
+              "id": "%7CNfO",
+              "type": "rich_text",
+              "rich_text": []
+            },
+            "Company Name": {
+              "id": "~Guk",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Bloom Floral",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Bloom Floral",
+                  "href": null
+                }
+              ]
+            },
+            "Customer Name": {
+              "id": "title",
+              "type": "title",
+              "title": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Elena Rodriguez",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Elena Rodriguez",
+                  "href": null
+                }
+              ]
+            }
+          },
+          "url": "https://www.notion.so/Elena-Rodriguez-31925c0ea33b819899b9e73cd8bff276",
+          "public_url": null,
+          "request_id": "2ef7c1dd-6581-406b-aca5-db900946287b"
+        }
+      }
+    ],
+    "AI Agent: Write Email 2 (Value Add)": [
+      {
+        "json": {
+          "output": {
+            "email_subject": "Beyond the auto-reply: technical context in real-time",
+            "email_body": "Marcus, small detail I've noticed with high-growth MSPs: \n\nOften, the \"good\" leads get buried because Salesforce treats a Tier-1 infrastructure inquiry the same as a person just asking for a whitepaper. When your team finally digs out the high-intent lead, the prospect has already prioritized the vendor who acknowledged their specific technical challenge first.\n\nWhat most people miss is that AI can actually \"read\" the lead's notes for technical keywords—like \"Azure migration\" or \"compliance audit\"—and instantly draft an Outlook reply that references those specific needs. It turns a generic auto-reply into a strategic first touch that buys your team time to follow up manually without looking like they're late to the party.\n\nDoes your current triage process differentiate between these technical needs, or is it a first-in-first-out queue at the moment?"
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Send Email 2": [
+      {
+        "json": {
+          "id": "19cbb178553c3eae",
+          "threadId": "19cbb178553c3eae",
+          "labelIds": [
+            "SENT"
+          ]
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Update Notion: Email 2 Sent": [
+      {
+        "json": {
+          "id": "31925c0e-a33b-8146-8252-db576bb3d4d0",
+          "name": "Marcus Chen",
+          "url": "https://www.notion.so/Marcus-Chen-31925c0ea33b81468252db576bb3d4d0",
+          "property_internal_note": "The lead has a clear ROI-linked problem and a budget that aligns perfectly with the consultant's target range. Their 'ASAP' timeline and specific lead loss metric indicate a high readiness to convert immediately.",
+          "property_email_3_sent_at": null,
+          "property_timeline": "ASAP",
+          "property_replied_at": null,
+          "property_email_1_subject": "Recovering the 20% lead loss at Zenit Tech",
+          "property_tech_stack": "Salesforce, Microsoft Outlook, Calendly",
+          "property_email": "urv2000patel@gmail.com",
+          "property_email_3_subject": "",
+          "property_company_size": "11-50",
+          "property_email_2_sent_at": {
+            "start": "2026-03-04",
+            "end": null,
+            "time_zone": null
+          },
+          "property_composite_score": 9.3,
+          "property_bucket": "Hot",
+          "property_date_received": {
+            "start": "2026-03-03",
+            "end": null,
+            "time_zone": null
+          },
+          "property_automation_opportunity": "Build an AI-powered Lead Triage and Auto-Response system that categorizes Salesforce leads and generates personalized, context-aware replies via Outlook.",
+          "property_pain_point": "lead loss from slow response times",
+          "property_budget": "$1000+",
+          "property_email_1_sent_at": {
+            "start": "2026-03-04",
+            "end": null,
+            "time_zone": null
+          },
+          "property_status": "Email 2 Sent",
+          "property_industry": "IT Services & Managed Solutions",
+          "property_email_2_subject": "Beyond the auto-reply: technical context in real-time",
+          "property_company_name": "Zenit Tech",
+          "property_customer_name": "Marcus Chen"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Tally Form Submission": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.465768.xyz",
+            "user-agent": "Tally Webhooks",
+            "content-length": "1879",
+            "accept": "application/json, text/plain, */*",
+            "accept-encoding": "gzip, br",
+            "baggage": "sentry-environment=production,sentry-release=f7f6ac58897d599d965b542132d91b3fc2e43b42,sentry-public_key=6af4b6673f1648edaa8fef3f2ca43405,sentry-trace_id=72bb1558253aace148c3fa3eb9ba37a8,sentry-org_id=407628,sentry-sampled=false,sentry-sample_rand=0.4553650049119259,sentry-sample_rate=0",
+            "cdn-loop": "cloudflare; loops=1",
+            "cf-connecting-ip": "34.96.41.183",
+            "cf-ipcountry": "BE",
+            "cf-ray": "9d74c2a82d595f1b-LHR",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-warp-tag-id": "ddfbb31f-5f7f-4d1b-a76e-04bde0c811c2",
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "sentry-trace": "72bb1558253aace148c3fa3eb9ba37a8-8702a8310f5fa9e8-0",
+            "x-forwarded-for": "34.96.41.183",
+            "x-forwarded-proto": "https"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "eventId": "2bd8d296-3510-44fc-83d9-fb47769cb97a",
+            "eventType": "FORM_RESPONSE",
+            "createdAt": "2026-03-04T23:46:27.196Z",
+            "data": {
+              "responseId": "RG7gW1p",
+              "submissionId": "RG7gW1p",
+              "respondentId": "Ek04NBN",
+              "formId": "0QE9VN",
+              "formName": "Lead Capture",
+              "createdAt": "2026-03-04T23:46:27.000Z",
+              "fields": [
+                {
+                  "key": "question_BG9zV1",
+                  "label": "Full Name",
+                  "type": "INPUT_TEXT",
+                  "value": "Kiran Patel"
+                },
+                {
+                  "key": "question_kYrdQZ",
+                  "label": "Email Address",
+                  "type": "INPUT_EMAIL",
+                  "value": "urvpatel2311@gmail.com"
+                },
+                {
+                  "key": "question_vNWGv4",
+                  "label": "Company Name",
+                  "type": "INPUT_TEXT",
+                  "value": "Zenith Tech"
+                },
+                {
+                  "key": "question_KMRYND",
+                  "label": "Company Size",
+                  "type": "DROPDOWN",
+                  "value": [
+                    "288d3cb5-7d36-4333-be96-448fdede332c"
+                  ],
+                  "options": [
+                    {
+                      "id": "8e6494f2-2b23-4797-be0c-90cd4228954f",
+                      "text": "1"
+                    },
+                    {
+                      "id": "be4737c5-d9f6-4596-bedb-b146df2a10d5",
+                      "text": "2-10"
+                    },
+                    {
+                      "id": "288d3cb5-7d36-4333-be96-448fdede332c",
+                      "text": "11-50"
+                    },
+                    {
+                      "id": "31b45ee5-452a-4dc5-8e18-d5ddb0c4288d",
+                      "text": "50+"
+                    }
+                  ]
+                },
+                {
+                  "key": "question_LdoZqJ",
+                  "label": "Primary Challenge",
+                  "type": "TEXTAREA",
+                  "value": "We spend 3 hours daily on manual follow-ups."
+                },
+                {
+                  "key": "question_pLZb6P",
+                  "label": "Current Tools",
+                  "type": "INPUT_TEXT",
+                  "value": "Gmail, Notion"
+                },
+                {
+                  "key": "question_1rBAgb",
+                  "label": "Project Timeline",
+                  "type": "DROPDOWN",
+                  "value": [
+                    "671bff6a-9c1e-4dbb-aab5-7d5a421c8e73"
+                  ],
+                  "options": [
+                    {
+                      "id": "671bff6a-9c1e-4dbb-aab5-7d5a421c8e73",
+                      "text": "ASAP"
+                    },
+                    {
+                      "id": "5055367f-66a6-4185-a586-cb87ac3d99aa",
+                      "text": "1-3 Months"
+                    },
+                    {
+                      "id": "1ccf95c4-bf5d-414f-b90e-8fef60af02d5",
+                      "text": "Just Exploring"
+                    }
+                  ]
+                },
+                {
+                  "key": "question_MAGeQ8",
+                  "label": "Monthly Budget ",
+                  "type": "DROPDOWN",
+                  "value": [
+                    "f1bf70dc-48e6-4514-a641-9c056a82e21c"
+                  ],
+                  "options": [
+                    {
+                      "id": "973812a9-fb4d-4b89-a441-6e8c58cf2c4f",
+                      "text": "$100-$200"
+                    },
+                    {
+                      "id": "f581f73d-983a-4d16-bb83-ef46f4da275c",
+                      "text": "$201-$500"
+                    },
+                    {
+                      "id": "feaa6382-d032-4537-a761-6678ad7783f0",
+                      "text": "$500-$1000"
+                    },
+                    {
+                      "id": "f1bf70dc-48e6-4514-a641-9c056a82e21c",
+                      "text": "$1000+"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "webhookUrl": "https://n8n.465768.xyz/webhook-test/lead-capture",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Code in JavaScript": [
+      {
+        "json": {
+          "Full Name": "Kiran Patel",
+          "Email Address": "urvpatel2311@gmail.com",
+          "Company Name": "Zenith Tech",
+          "Company Size": "11-50",
+          "Primary Challenge": "We spend 3 hours daily on manual follow-ups.",
+          "Current Tools": "Gmail, Notion",
+          "Project Timeline": "ASAP",
+          "Monthly Budget": "$1000+"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "AI Agent 1: Extract + Score + Pain Point": [
+      {
+        "json": {
+          "output": {
+            "full_name": "Kiran Patel",
+            "company_name": "Zenith Tech",
+            "company_size": "11-50",
+            "email": "urvpatel2311@gmail.com",
+            "stated_problem": "We spend 3 hours daily on manual follow-ups.",
+            "current_tools": "Gmail, Notion",
+            "budget_range": "$1000+",
+            "timeline": "ASAP",
+            "pain_point_theme": "manual follow-up time loss",
+            "scores": {
+              "budget_fit": 10,
+              "urgency": 10,
+              "problem_clarity": 9,
+              "decision_maker": 8
+            },
+            "composite_score": 9.3,
+            "bucket": "Hot",
+            "internal_note": "The lead has a clear pain point and a budget that aligns perfectly with the consultant's rates. Their timeline is 'ASAP', indicating high urgency to solve a specific manual process issue."
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "AI Agent 2: Company Intelligence": [
+      {
+        "json": {
+          "output": {
+            "industry": "B2B Tech Services / IT Consulting",
+            "business_model": "B2B Service or Project-based Consulting",
+            "likely_tech_stack": [
+              "Notion",
+              "Gmail (Google Workspace)",
+              "Zapier or Make.com"
+            ],
+            "core_pain_points": [
+              "High lead leakage due to delayed or forgotten manual follow-ups",
+              "Founder/Key employee burnout from repetitive administrative tasks over high-value work",
+              "Inconsistent sales pipeline tracking within non-specialized tools like Notion"
+            ],
+            "automation_opportunity": "An automated lead nurture sequence that pulls Notion CRM data into an AI-personalized Gmail outreach engine.",
+            "likely_objections": [
+              "Concerns that automation will make follow-ups feel 'robotic' and damage client relationships.",
+              "Worry that their current Notion setup is too messy to serve as a foundation for automation."
+            ],
+            "best_positioning_angle": "Position yourself as an efficiency architect who specializes in 'Systematized Growth' for boutique tech firms, turning their Notion workspace into an automated sales engine.",
+            "personalization_hook": "I noticed you're managing both operations and outreach between Gmail and Notion, which often leads to that daily 3-hour follow-up grind."
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Notion: Create Lead Page": [
+      {
+        "json": {
+          "id": "31925c0e-a33b-8108-9beb-c7188141950f",
+          "name": "Kiran Patel",
+          "url": "https://www.notion.so/Kiran-Patel-31925c0ea33b81089bebc7188141950f",
+          "property_internal_note": "The lead has a clear pain point and a budget that aligns perfectly with the consultant's rates. Their timeline is 'ASAP', indicating high urgency to solve a specific manual process issue.",
+          "property_email_3_sent_at": null,
+          "property_timeline": "ASAP",
+          "property_replied_at": null,
+          "property_email_1_subject": "",
+          "property_tech_stack": "",
+          "property_email": "urvpatel2311@gmail.com",
+          "property_email_3_subject": "",
+          "property_company_size": "11-50",
+          "property_email_2_sent_at": null,
+          "property_composite_score": 9.3,
+          "property_bucket": "Hot",
+          "property_date_received": {
+            "start": "2026-03-03",
+            "end": null,
+            "time_zone": null
+          },
+          "property_automation_opportunity": "",
+          "property_pain_point": "manual follow-up time loss",
+          "property_budget": "$1000+",
+          "property_email_1_sent_at": null,
+          "property_status": "New",
+          "property_industry": "",
+          "property_email_2_subject": "",
+          "property_company_name": "Zenith Tech",
+          "property_customer_name": "Kiran Patel"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Merge: Intel + Notion Page ID": [
+      {
+        "json": {
+          "output": {
+            "industry": "B2B Tech Services / IT Consulting",
+            "business_model": "B2B Service or Project-based Consulting",
+            "likely_tech_stack": [
+              "Notion",
+              "Gmail (Google Workspace)",
+              "Zapier or Make.com"
+            ],
+            "core_pain_points": [
+              "High lead leakage due to delayed or forgotten manual follow-ups",
+              "Founder/Key employee burnout from repetitive administrative tasks over high-value work",
+              "Inconsistent sales pipeline tracking within non-specialized tools like Notion"
+            ],
+            "automation_opportunity": "An automated lead nurture sequence that pulls Notion CRM data into an AI-personalized Gmail outreach engine.",
+            "likely_objections": [
+              "Concerns that automation will make follow-ups feel 'robotic' and damage client relationships.",
+              "Worry that their current Notion setup is too messy to serve as a foundation for automation."
+            ],
+            "best_positioning_angle": "Position yourself as an efficiency architect who specializes in 'Systematized Growth' for boutique tech firms, turning their Notion workspace into an automated sales engine.",
+            "personalization_hook": "I noticed you're managing both operations and outreach between Gmail and Notion, which often leads to that daily 3-hour follow-up grind."
+          },
+          "id": "31925c0e-a33b-8108-9beb-c7188141950f",
+          "name": "Kiran Patel",
+          "url": "https://www.notion.so/Kiran-Patel-31925c0ea33b81089bebc7188141950f",
+          "property_internal_note": "The lead has a clear pain point and a budget that aligns perfectly with the consultant's rates. Their timeline is 'ASAP', indicating high urgency to solve a specific manual process issue.",
+          "property_email_3_sent_at": null,
+          "property_timeline": "ASAP",
+          "property_replied_at": null,
+          "property_email_1_subject": "",
+          "property_tech_stack": "",
+          "property_email": "urvpatel2311@gmail.com",
+          "property_email_3_subject": "",
+          "property_company_size": "11-50",
+          "property_email_2_sent_at": null,
+          "property_composite_score": 9.3,
+          "property_bucket": "Hot",
+          "property_date_received": {
+            "start": "2026-03-03",
+            "end": null,
+            "time_zone": null
+          },
+          "property_automation_opportunity": "",
+          "property_pain_point": "manual follow-up time loss",
+          "property_budget": "$1000+",
+          "property_email_1_sent_at": null,
+          "property_status": "New",
+          "property_industry": "",
+          "property_email_2_subject": "",
+          "property_company_name": "Zenith Tech",
+          "property_customer_name": "Kiran Patel"
+        },
+        "binary": {},
+        "pairedItem": [
+          {
+            "item": 0
+          },
+          {
+            "item": 0,
+            "input": 1
+          },
+          {
+            "item": 0,
+            "input": 1
+          }
+        ]
+      }
+    ],
+    "AI Agent 3: Hyper-Personalized Email Writer": [
+      {
+        "json": {
+          "output": {
+            "email_subject": "Reclaiming 3 hours on Zenith Tech follow-ups",
+            "email_body": "Kiran, managing operations while toggling between Gmail and Notion seems to be fueling that daily three-hour follow-up grind you mentioned. \n\nWe can turn your Notion workspace into a proactive sales engine by syncing your CRM data with an AI-driven Gmail outreach layer. This allows you to scale that \"manual\" touch without the time-sink. While people often worry that removing the manual element makes things feel robotic, we’ll use specific data triggers from your records so every message feels like you personally sat down to write it.\n\nAre you open to a 15-minute sync this Thursday or Friday to look at how we can get those three hours back?"
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Send Hot Email": [
+      {
+        "json": {
+          "id": "19cbb40755b19868",
+          "threadId": "19cbb40755b19868",
+          "labelIds": [
+            "SENT"
+          ]
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Update Notion: Hot (Score + Intel + Email 1)2": [
+      {
+        "json": {
+          "object": "page",
+          "id": "31925c0e-a33b-8108-9beb-c7188141950f",
+          "created_time": "2026-03-04T23:47:00.000Z",
+          "last_edited_time": "2026-03-04T23:48:00.000Z",
+          "created_by": {
+            "object": "user",
+            "id": "31825c0e-a33b-81b6-8788-002780f06bd3"
+          },
+          "last_edited_by": {
+            "object": "user",
+            "id": "31825c0e-a33b-81b6-8788-002780f06bd3"
+          },
+          "cover": null,
+          "icon": null,
+          "parent": {
+            "type": "database_id",
+            "database_id": "31925c0e-a33b-8051-ac0f-c2dbf49a7c5e"
+          },
+          "archived": false,
+          "in_trash": false,
+          "is_locked": false,
+          "properties": {
+            "Internal Note": {
+              "id": "%3EYo%3B",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "The lead has a clear pain point and a budget that aligns perfectly with the consultant's rates. Their timeline is 'ASAP', indicating high urgency to solve a specific manual process issue.",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "The lead has a clear pain point and a budget that aligns perfectly with the consultant's rates. Their timeline is 'ASAP', indicating high urgency to solve a specific manual process issue.",
+                  "href": null
+                }
+              ]
+            },
+            "Email 3 Sent At": {
+              "id": "%40Vcn",
+              "type": "date",
+              "date": null
+            },
+            "Timeline": {
+              "id": "AwHQ",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "ASAP",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "ASAP",
+                  "href": null
+                }
+              ]
+            },
+            "Replied At": {
+              "id": "EV%7Bl",
+              "type": "date",
+              "date": null
+            },
+            "Email 1 Subject": {
+              "id": "G_f%7C",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Reclaiming 3 hours on Zenith Tech follow-ups",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Reclaiming 3 hours on Zenith Tech follow-ups",
+                  "href": null
+                }
+              ]
+            },
+            "Tech Stack": {
+              "id": "K%7CRk",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Notion, Gmail (Google Workspace), Zapier or Make.com",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Notion, Gmail (Google Workspace), Zapier or Make.com",
+                  "href": null
+                }
+              ]
+            },
+            "Email": {
+              "id": "R%5BfJ",
+              "type": "email",
+              "email": "urvpatel2311@gmail.com"
+            },
+            "Email 3 Subject": {
+              "id": "Xer%60",
+              "type": "rich_text",
+              "rich_text": []
+            },
+            "Company Size": {
+              "id": "%5B%7CLg",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "11-50",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "11-50",
+                  "href": null
+                }
+              ]
+            },
+            "Email 2 Sent At": {
+              "id": "aEXV",
+              "type": "date",
+              "date": null
+            },
+            "Composite Score": {
+              "id": "d%60v%3F",
+              "type": "number",
+              "number": 9.3
+            },
+            "Bucket": {
+              "id": "h%3B%40H",
+              "type": "select",
+              "select": {
+                "id": "CJNA",
+                "name": "Hot",
+                "color": "red"
+              }
+            },
+            "Date Received": {
+              "id": "o_%40X",
+              "type": "date",
+              "date": {
+                "start": "2026-03-03",
+                "end": null,
+                "time_zone": null
+              }
+            },
+            "Automation Opportunity": {
+              "id": "q%7By~",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "An automated lead nurture sequence that pulls Notion CRM data into an AI-personalized Gmail outreach engine.",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "An automated lead nurture sequence that pulls Notion CRM data into an AI-personalized Gmail outreach engine.",
+                  "href": null
+                }
+              ]
+            },
+            "Pain Point": {
+              "id": "rPtO",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "manual follow-up time loss",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "manual follow-up time loss",
+                  "href": null
+                }
+              ]
+            },
+            "Budget": {
+              "id": "tXue",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "$1000+",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "$1000+",
+                  "href": null
+                }
+              ]
+            },
+            "Email 1 Sent At": {
+              "id": "taIQ",
+              "type": "date",
+              "date": {
+                "start": "2026-03-04",
+                "end": null,
+                "time_zone": null
+              }
+            },
+            "Status": {
+              "id": "yaK%60",
+              "type": "select",
+              "select": {
+                "id": "f7a8a78a-e753-4ac2-b621-a907f3eccddc",
+                "name": "Email 1 Sent",
+                "color": "yellow"
+              }
+            },
+            "Industry": {
+              "id": "zDYL",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "B2B Tech Services / IT Consulting",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "B2B Tech Services / IT Consulting",
+                  "href": null
+                }
+              ]
+            },
+            "Email 2 Subject": {
+              "id": "%7CNfO",
+              "type": "rich_text",
+              "rich_text": []
+            },
+            "Company Name": {
+              "id": "~Guk",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Zenith Tech",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Zenith Tech",
+                  "href": null
+                }
+              ]
+            },
+            "Customer Name": {
+              "id": "title",
+              "type": "title",
+              "title": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Kiran Patel",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Kiran Patel",
+                  "href": null
+                }
+              ]
+            }
+          },
+          "url": "https://www.notion.so/Kiran-Patel-31925c0ea33b81089bebc7188141950f",
+          "public_url": null,
+          "request_id": "4bbd1fe7-c5f4-4799-8cab-a163801a39d0"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Telegram: Hot Lead Intel Brief": [
+      {
+        "json": {
+          "ok": true,
+          "result": {
+            "message_id": 97,
+            "from": {
+              "id": 8362810409,
+              "is_bot": true,
+              "first_name": "Jerry",
+              "username": "jerry_urvs_bot"
+            },
+            "chat": {
+              "id": 5865270440,
+              "first_name": "Urv",
+              "last_name": "Patel",
+              "type": "private"
+            },
+            "date": 1772668105,
+            "text": "🔥 HOT LEAD ALERT\n\n👤 Kiran Patel — Zenith Tech\n📊 Score: 9.3/10\n🏢 B2B Tech Services / IT Consulting | B2B Service or Project-based Consulting\n\n💡 Opportunity:\nAn automated lead nurture sequence that pulls Notion CRM data into an AI-personalized Gmail outreach engine.\n\n🎯 Positioning:\nPosition yourself as an efficiency architect who specializes in 'Systematized Growth' for boutique tech firms, turning their Notion workspace into an automated sales engine.\n\n⚠️ Watch for:\nConcerns that automation will make follow-ups feel 'robotic' and damage client relationships.\n\n🪝 Hook Used:\nI noticed you're managing both operations and outreach between Gmail and Notion, which often leads to that daily 3-hour follow-up grind.\n\n🛠 Stack: Notion, Gmail (Google Workspace), Zapier or Make.com\n\n📧 Reply to: urvpatel2311@gmail.com",
+            "entities": [
+              {
+                "offset": 777,
+                "length": 8,
+                "type": "url"
+              },
+              {
+                "offset": 800,
+                "length": 22,
+                "type": "email"
+              }
+            ]
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Wait 24 Hours": [
+      {
+        "json": {
+          "Email Address": "urvpatel2311@gmail.com",
+          "Full Name": "Kiran Patel",
+          "Company Name": "Zenith Tech",
+          "Notion Page ID": "31925c0e-a33b-8108-9beb-c7188141950f",
+          "Pain Point Theme": "manual follow-up time loss",
+          "Industry": "B2B Tech Services / IT Consulting",
+          "Automation Opportunity": "An automated lead nurture sequence that pulls Notion CRM data into an AI-personalized Gmail outreach engine.",
+          "Email 1 Subject": "Reclaiming 3 hours on Zenith Tech follow-ups",
+          "Email 1 Body": "Kiran, managing operations while toggling between Gmail and Notion seems to be fueling that daily three-hour follow-up grind you mentioned. \n\nWe can turn your Notion workspace into a proactive sales engine by syncing your CRM data with an AI-driven Gmail outreach layer. This allows you to scale that \"manual\" touch without the time-sink. While people often worry that removing the manual element makes things feel robotic, we’ll use specific data triggers from your records so every message feels like you personally sat down to write it.\n\nAre you open to a 15-minute sync this Thursday or Friday to look at how we can get those three hours back?"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Gmail: Check for Reply (1)": [
+      {
+        "json": {
+          "id": "19cbb4155181a199",
+          "threadId": "19cbb40755b19868",
+          "labelIds": [
+            "UNREAD",
+            "IMPORTANT",
+            "CATEGORY_PERSONAL",
+            "INBOX"
+          ],
+          "sizeEstimate": 9490,
+          "headers": {
+            "delivered-to": "Delivered-To: urv.patel.dev@gmail.com",
+            "received": "Received: from mail-sor-f41.google.com (mail-sor-f41.google.com. [209.85.220.41])\r\n        by mx.google.com with SMTPS id 6a1803df08f44-89a1f845d97sor10742526d6.7.2026.03.04.15.49.06\r\n        for <urv.patel.dev@gmail.com>\r\n        (Google Transport Security);\r\n        Wed, 04 Mar 2026 15:49:06 -0800 (PST)",
+            "x-received": "X-Received: by 2002:ad4:5946:0:b0:89a:9b1:a225 with SMTP id\r\n 6a1803df08f44-89a199852b9mr59097866d6.12.1772668145995; Wed, 04 Mar 2026\r\n 15:49:05 -0800 (PST)",
+            "arc-seal": "ARC-Seal: i=1; a=rsa-sha256; t=1772668146; cv=none;\r\n        d=google.com; s=arc-20240605;\r\n        b=Rq1GO413pb9rreQEfuxFa4Xz3TcnOr2USJIueulgZ6Q/Aw0qWs8Nmv6RUL78notFkp\r\n         hU4p17oprKHNkUtMgvcwqIm60XJ5gsOonlSvDH8kq2rIYKvTlQWVAUORikOhWYyFjrtR\r\n         DgRaTVELr17o3ZZcn4ib9f/9dEAlyFLAThT+W3bflqOF3W9xaxKAVHrRtl9Duzt0ZIWy\r\n         EdXBhHWPWMY6dR8yUYv+NGG++0eMvKrfJf3dkPxv0aUNfSjMrnkb5tUDVr/frb/Uduzy\r\n         LxHBVFwlerz9QFIsoZ2v/26nr59cl2EP/Lkb56Fk2wCLDKdSfdV09+ZdYRLt6CA95JL6\r\n         CBhg==",
+            "arc-message-signature": "ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;\r\n        h=to:subject:message-id:date:from:in-reply-to:references:mime-version\r\n         :dkim-signature;\r\n        bh=4vPYd1lpAvFemCmmHCIFNMIph2VBR7Iyd2KKpwha/Jc=;\r\n        fh=BW1Z92A6+xPlN9MbgyzliDPlf0cjVYe4NSATCelaoQw=;\r\n        b=g7gghB+4rAnnL4lkyVc1oqO5tBkQefV8o3WxneD0VCjdJO3uNA0m8OBJIK8nyetzjW\r\n         /CVo6IKYMKu7jU6pzF11ZviTrhAKp1Dl9qJZ0ORvCCXgvxEB2mvPiS6geDNeEMay652q\r\n         nA4WK3EX/zwuRVoFko46eOMpDeyj3rLnJAQve+730XYa2SUlsTsI+vQ0nkwubhNEjOw+\r\n         rPwHAG7PyRknTNuPuBTbFvjOhWRIODB0kWq8Fmi3hrWAJ1hvJUntbdgb+M+lxVBoUJCU\r\n         v0K6gcpXn8ObOVEkGjcsWMLkvUXAG5sHSmUNc8RWZMif0rMIuoGEOw2DVU8tLDo6tdTs\r\n         STZw==;\r\n        dara=google.com",
+            "arc-authentication-results": "ARC-Authentication-Results: i=1; mx.google.com; arc=none",
+            "return-path": "Return-Path: <urvpatel2311@gmail.com>",
+            "received-spf": "Received-SPF: pass (google.com: domain of urvpatel2311@gmail.com designates 209.85.220.41 as permitted sender) client-ip=209.85.220.41;",
+            "authentication-results": "Authentication-Results: mx.google.com;\r\n       dkim=pass header.i=@gmail.com header.s=20230601 header.b=UEJeMVHc;\r\n       arc=pass (i=1);\r\n       spf=pass (google.com: domain of urvpatel2311@gmail.com designates 209.85.220.41 as permitted sender) smtp.mailfrom=urvpatel2311@gmail.com;\r\n       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com;\r\n       dara=pass header.i=@gmail.com",
+            "dkim-signature": "DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n        d=gmail.com; s=20230601; t=1772668146; x=1773272946; dara=google.com;\r\n        h=to:subject:message-id:date:from:in-reply-to:references:mime-version\r\n         :from:to:cc:subject:date:message-id:reply-to;\r\n        bh=4vPYd1lpAvFemCmmHCIFNMIph2VBR7Iyd2KKpwha/Jc=;\r\n        b=UEJeMVHc5R55biZckWon8p8h3aT7pDwk0577K0CpGaBjl9v4slc8PzhJyeLgR4FyI9\r\n         GleNqJiNKncVi0ddozNdNISDm/3iEMLcRoqnKROqUfGgD3FiKg2MyGRgcDyTp2ff8pBd\r\n         SIODgq/8qmZVIOA9Un0vphJMFGWxi2WTzcQQbUbBfadr4MKbmB/wDsqlhPvVqNJ+X7AQ\r\n         Sf0rrqe+kHZgXQWJ3KfsyKe2m1SMPAA7VeE2QOfnB0GYWEiFj9DW5XupJPxmyWqpBYpi\r\n         mwJnq71S0qCrerlvyVKsGebuLTSZaejbbTN12wdjHAhZeC1XTKeoM/HrMTw3A+aSOLbU\r\n         vlEw==",
+            "x-google-dkim-signature": "X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n        d=1e100.net; s=20230601; t=1772668146; x=1773272946;\r\n        h=to:subject:message-id:date:from:in-reply-to:references:mime-version\r\n         :x-gm-gg:x-gm-message-state:from:to:cc:subject:date:message-id\r\n         :reply-to;\r\n        bh=4vPYd1lpAvFemCmmHCIFNMIph2VBR7Iyd2KKpwha/Jc=;\r\n        b=rB+EbP5axk2hRe2fz/vWdq9mFQwzAwmBu5krfOykezlliHeD6fbBmmMLWSi4fH4Qg4\r\n         mATRknQ264pdRRcej2OGMZvgYW/c4yfGr32F1Lvz6W9Wjm4ERC1UEiu6fY1lCMkGn9Xx\r\n         23gvHzJIQqD5y6Wn3jYykDPo3M4Hov9pX1lhZj+N8ypTeXPPgx1zIVD3ZLw+RR+pJUQY\r\n         e6QA3fOaKMiCKXaIjzdz5xv1n2mlfgM/XCLdFIV1Z+ZvLO6hToQ/ZqnsDaI8IhhqcANh\r\n         q0yfPmMMlk1/ZxKAaDbo9zgCVIJeF4FUSBmK1UocM/nUlNVBQsQr9PGyg7KBzlE3OSkl\r\n         1uRA==",
+            "x-gm-message-state": "X-Gm-Message-State: AOJu0YxkhIzQ5XSTn+AeNtMUdmDxjHdaoFF08RHWmZqb+yRqF+Es7OyQ\r\n\tTxxg8xGR1D5Eqm1jPYcnigRwS7M2lgaahxiyvpk/665y3JaSxayam5wVIo+jdZo+taD95atawOk\r\n\tCZHZqzgb0HDrhvqy9ZNCui28jQUwNOhlrtw==",
+            "x-gm-gg": "X-Gm-Gg: ATEYQzwAay0Ou3f2iBe05H1pxmV2cJsUFASsfDHbFwxwgfNz7A4bl/vW6JUbPpAZp3q\r\n\tKFv1gkq0dGOeCWQG6cmEEa+cUjGct/pjNe/Mil2PBgZS7FWbBMAOLtKL+v0PtOvXgQlgQBm+SqF\r\n\tmZxZBa5LRsqBhdDr468NW8pOHjB0P8Xj+90hPMDpYJ+r+C5vactQRtNVt5A6TE0cXmpFi7GXBuM\r\n\t/tZ7/Dt3at7IyLvJqFgPiHcBlA13cQv9FwxadNEpywI0BVWar7oKexb/G54qDiQRdUNS0yJk9N2\r\n\tYB+73rOoI9XLBu2OBRLibTqliP1W4eB4bQN+dDOqVg==",
+            "mime-version": "MIME-Version: 1.0",
+            "references": "References: <CAB7T3G2XpFABLQpZCT6chP+GiKtNOCeVFM7PUxEztgD6x9Metw@mail.gmail.com>",
+            "in-reply-to": "In-Reply-To: <CAB7T3G2XpFABLQpZCT6chP+GiKtNOCeVFM7PUxEztgD6x9Metw@mail.gmail.com>",
+            "from": "From: Urv <urvpatel2311@gmail.com>",
+            "date": "Date: Wed, 4 Mar 2026 18:48:55 -0500",
+            "x-gm-features": "X-Gm-Features: AaiRm513kzdsyKsPSAdXqGgDhpKGZIdc1hVJdi8cBykeb1x9iWhKNXLPIBxF1FY",
+            "message-id": "Message-ID: <CAC4sUKrO4PAzJo-4P85e9BOVtnMxGD+bYudU+DxJgJVTimXCUQ@mail.gmail.com>",
+            "subject": "Subject: Re: Reclaiming 3 hours on Zenith Tech follow-ups",
+            "to": "To: urv.patel.dev@gmail.com",
+            "content-type": "Content-Type: multipart/alternative; boundary=\"000000000000259463064c3b773a\""
+          },
+          "html": "<div dir=\"auto\">Sounds interesting, lets talk. </div><div><br><div class=\"gmail_quote gmail_quote_container\"><div dir=\"ltr\" class=\"gmail_attr\">On Wed, Mar 4, 2026 at 6:48 PM &lt;<a href=\"mailto:urv.patel.dev@gmail.com\">urv.patel.dev@gmail.com</a>&gt; wrote:<br></div><blockquote class=\"gmail_quote\" style=\"margin:0 0 0 .8ex;border-left:1px #ccc solid;padding-left:1ex\">Kiran, managing operations while toggling between Gmail and Notion<br>\nseems to be fueling that daily three-hour follow-up grind you<br>\nmentioned.<br>\n<br>\nWe can turn your Notion workspace into a proactive sales engine by<br>\nsyncing your CRM data with an AI-driven Gmail outreach layer. This<br>\nallows you to scale that &quot;manual&quot; touch without the time-sink. While<br>\npeople often worry that removing the manual element makes things feel<br>\nrobotic, we’ll use specific data triggers from your records so every<br>\nmessage feels like you personally sat down to write it.<br>\n<br>\nAre you open to a 15-minute sync this Thursday or Friday to look at<br>\nhow we can get those three hours back?<br>\n<br>\n---<br>\nThis email was sent automatically with n8n<br>\n<a href=\"https://n8n.io\" rel=\"noreferrer\" target=\"_blank\">https://n8n.io</a><br>\n</blockquote></div></div>\n",
+          "text": "Sounds interesting, lets talk.\n\nOn Wed, Mar 4, 2026 at 6:48 PM <urv.patel.dev@gmail.com> wrote:\n\n> Kiran, managing operations while toggling between Gmail and Notion\n> seems to be fueling that daily three-hour follow-up grind you\n> mentioned.\n>\n> We can turn your Notion workspace into a proactive sales engine by\n> syncing your CRM data with an AI-driven Gmail outreach layer. This\n> allows you to scale that \"manual\" touch without the time-sink. While\n> people often worry that removing the manual element makes things feel\n> robotic, we’ll use specific data triggers from your records so every\n> message feels like you personally sat down to write it.\n>\n> Are you open to a 15-minute sync this Thursday or Friday to look at\n> how we can get those three hours back?\n>\n> ---\n> This email was sent automatically with n8n\n> https://n8n.io\n>\n",
+          "textAsHtml": "<p>Sounds interesting, lets talk.</p><p>On Wed, Mar 4, 2026 at 6:48&#x202F;PM &lt;<a href=\"mailto:urv.patel.dev@gmail.com\">urv.patel.dev@gmail.com</a>&gt; wrote:</p><p>&gt; Kiran, managing operations while toggling between Gmail and Notion<br/>&gt; seems to be fueling that daily three-hour follow-up grind you<br/>&gt; mentioned.<br/>&gt;<br/>&gt; We can turn your Notion workspace into a proactive sales engine by<br/>&gt; syncing your CRM data with an AI-driven Gmail outreach layer. This<br/>&gt; allows you to scale that &quot;manual&quot; touch without the time-sink. While<br/>&gt; people often worry that removing the manual element makes things feel<br/>&gt; robotic, we&rsquo;ll use specific data triggers from your records so every<br/>&gt; message feels like you personally sat down to write it.<br/>&gt;<br/>&gt; Are you open to a 15-minute sync this Thursday or Friday to look at<br/>&gt; how we can get those three hours back?<br/>&gt;<br/>&gt; ---<br/>&gt; This email was sent automatically with n8n<br/>&gt; <a href=\"https://n8n.io\">https://n8n.io</a><br/>&gt;</p>",
+          "subject": "Re: Reclaiming 3 hours on Zenith Tech follow-ups",
+          "references": "<CAB7T3G2XpFABLQpZCT6chP+GiKtNOCeVFM7PUxEztgD6x9Metw@mail.gmail.com>",
+          "date": "2026-03-04T23:48:55.000Z",
+          "to": {
+            "value": [
+              {
+                "address": "urv.patel.dev@gmail.com",
+                "name": ""
+              }
+            ],
+            "html": "<span class=\"mp_address_group\"><a href=\"mailto:urv.patel.dev@gmail.com\" class=\"mp_address_email\">urv.patel.dev@gmail.com</a></span>",
+            "text": "urv.patel.dev@gmail.com"
+          },
+          "from": {
+            "value": [
+              {
+                "address": "urvpatel2311@gmail.com",
+                "name": "Urv"
+              }
+            ],
+            "html": "<span class=\"mp_address_group\"><span class=\"mp_address_name\">Urv</span> &lt;<a href=\"mailto:urvpatel2311@gmail.com\" class=\"mp_address_email\">urvpatel2311@gmail.com</a>&gt;</span>",
+            "text": "\"Urv\" <urvpatel2311@gmail.com>"
+          },
+          "messageId": "<CAC4sUKrO4PAzJo-4P85e9BOVtnMxGD+bYudU+DxJgJVTimXCUQ@mail.gmail.com>",
+          "inReplyTo": "<CAB7T3G2XpFABLQpZCT6chP+GiKtNOCeVFM7PUxEztgD6x9Metw@mail.gmail.com>"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Update Notion: Status Replied (1)": [
+      {
+        "json": {
+          "id": "31925c0e-a33b-8108-9beb-c7188141950f",
+          "name": "Kiran Patel",
+          "url": "https://www.notion.so/Kiran-Patel-31925c0ea33b81089bebc7188141950f",
+          "property_internal_note": "The lead has a clear pain point and a budget that aligns perfectly with the consultant's rates. Their timeline is 'ASAP', indicating high urgency to solve a specific manual process issue.",
+          "property_email_3_sent_at": null,
+          "property_timeline": "ASAP",
+          "property_replied_at": {
+            "start": "2026-03-04",
+            "end": null,
+            "time_zone": null
+          },
+          "property_email_1_subject": "Reclaiming 3 hours on Zenith Tech follow-ups",
+          "property_tech_stack": "Notion, Gmail (Google Workspace), Zapier or Make.com",
+          "property_email": "urvpatel2311@gmail.com",
+          "property_email_3_subject": "",
+          "property_company_size": "11-50",
+          "property_email_2_sent_at": null,
+          "property_composite_score": 9.3,
+          "property_bucket": "Hot",
+          "property_date_received": {
+            "start": "2026-03-03",
+            "end": null,
+            "time_zone": null
+          },
+          "property_automation_opportunity": "An automated lead nurture sequence that pulls Notion CRM data into an AI-personalized Gmail outreach engine.",
+          "property_pain_point": "manual follow-up time loss",
+          "property_budget": "$1000+",
+          "property_email_1_sent_at": {
+            "start": "2026-03-04",
+            "end": null,
+            "time_zone": null
+          },
+          "property_status": "Replied - Sequence Stopped",
+          "property_industry": "B2B Tech Services / IT Consulting",
+          "property_email_2_subject": "",
+          "property_company_name": "Zenith Tech",
+          "property_customer_name": "Kiran Patel"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Tally Form Submission": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent 1: Extract + Score + Pain Point": {
+      "main": [
+        [
+          {
+            "node": "AI Agent 2: Company Intelligence",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notion: Create Lead Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Model (Agent 1)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent 1: Extract + Score + Pain Point",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent 2: Company Intelligence": {
+      "main": [
+        [
+          {
+            "node": "Merge: Intel + Notion Page ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Model (Agent 2)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent 2: Company Intelligence",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion: Create Lead Page": {
+      "main": [
+        [
+          {
+            "node": "Merge: Intel + Notion Page ID",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge: Intel + Notion Page ID": {
+      "main": [
+        [
+          {
+            "node": "AI Agent 3: Hyper-Personalized Email Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent 3: Hyper-Personalized Email Writer": {
+      "main": [
+        [
+          {
+            "node": "Priority Switch: Hot / Warm / Cold",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Model (Agent 3)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent 3: Hyper-Personalized Email Writer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Priority Switch: Hot / Warm / Cold": {
+      "main": [
+        [
+          {
+            "node": "Send Hot Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Warm Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Cold Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Hot Email": {
+      "main": [
+        [
+          {
+            "node": "Update Notion: Hot (Score + Intel + Email 1)2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Warm Email": {
+      "main": [
+        [
+          {
+            "node": "Update Notion: Warm (Score + Intel + Email 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Cold Email": {
+      "main": [
+        [
+          {
+            "node": "Update Notion: Cold (Score + Intel + Email 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Hot Lead Intel Brief": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 24 Hours": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Check for Reply (1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Check for Reply (1)": {
+      "main": [
+        [
+          {
+            "node": "Reply Check 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Check 1": {
+      "main": [
+        [
+          {
+            "node": "Update Notion: Status Replied (1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent: Write Email 2 (Value Add)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Model (Email 2)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent: Write Email 2 (Value Add)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent: Write Email 2 (Value Add)": {
+      "main": [
+        [
+          {
+            "node": "Send Email 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email 2": {
+      "main": [
+        [
+          {
+            "node": "Update Notion: Email 2 Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Notion: Email 2 Sent": {
+      "main": [
+        []
+      ]
+    },
+    "Wait 48 Hours": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Check for Reply (2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Check for Reply (2)": {
+      "main": [
+        [
+          {
+            "node": "Reply Check 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Check 2": {
+      "main": [
+        [
+          {
+            "node": "Update Notion: Status Replied (2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent: Write Email 3 (Final Touchpoint)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Model (Email 3)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent: Write Email 3 (Final Touchpoint)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent: Write Email 3 (Final Touchpoint)": {
+      "main": [
+        [
+          {
+            "node": "Send Email 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email 3": {
+      "main": [
+        [
+          {
+            "node": "Update Notion: Sequence Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser (Agent 1)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent 1: Extract + Score + Pain Point",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser (Agent 2)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent 2: Company Intelligence",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser (Agent 3)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent 3: Hyper-Personalized Email Writer",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser (Email 2)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent: Write Email 2 (Value Add)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser (Email 3)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent: Write Email 3 (Final Touchpoint)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "AI Agent 1: Extract + Score + Pain Point",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Notion: Hot (Score + Intel + Email 1)2": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Hot Lead Intel Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Notion: Cold (Score + Intel + Email 1)": {
+      "main": [
+        []
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Wait 24 Hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Wait 48 Hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "6f3ee5d9-de0f-4884-9951-e38ba5a3bf9e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f3d909286a843c4b65b69062d633d18150a5d1973ddfcb7920746576daeef0e2"
+  },
+  "id": "5PkCBILhksTfhsJpdrkvi",
+  "tags": []
+}
